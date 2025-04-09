@@ -52,25 +52,43 @@ def add_new_backlinks(info):
         write_lines_to_file(file, lines)
                 
 
-def find_links(lines):
+def find_links(file_path):
     backlinks = []
     links = []
-    regex = r"^-\s(\[.*\]\(.*\.md\))"
-    matches = re.finditer(regex, "".join(lines), re.MULTILINE)
+    lines_before_backlinks = [] 
+    lines_after_backlinks = [] 
+    backlinks_found = False
+
+    lines = read_lines_from_file(file_path)
+
+    for i, line in enumerate(lines):
+        if backlinks_found == False:
+            lines_before_backlinks.append(line)
+            if line.strip() == "backlinks:":
+                backlinks_found = True
+        else:
+            lines_after_backlinks.append(line)
+
+    if backlinks_found == False:
+        print(f"In \"{file_path}\" not found \"backlinks:\" string")
+        return [] 
+
+    regex = r"(\[.*\]\(.*\.md\))"
+    matches = re.finditer(regex, "".join(lines_after_backlinks), re.MULTILINE)
     for matchNum, match in enumerate(matches, start=1):
         for groupNum in range(0, len(match.groups())):
             groupNum = groupNum + 1 
             backlinks.append(match.group(groupNum))
-    matches = re.finditer(regex, "".join(lines), re.MULTILINE)
+
     regex = r"\[.*\]\(.*\.md\)"
-    matches = re.finditer(regex, "".join(lines), re.MULTILINE)
+    matches = re.finditer(regex, "".join(lines_before_backlinks), re.MULTILINE)
     for matchNum, match in enumerate(matches, start=1):
         links.append(match.group())
     
-    for link in links:
-        for backlink in backlinks:
-            if link == backlink:
-                links.remove(link)
+    #for link in links:
+    #    for backlink in backlinks:
+    #        if link == backlink:
+    #            links.remove(link)
 
     return [links, backlinks]
 
@@ -87,8 +105,9 @@ def create_links_database(files):
     links = []
     database = {}
     for file_path in files:
-        lines = read_lines_from_file(file_path)
-        links = find_links(lines)
+        links = find_links(file_path)
+        if links == []:
+            continue
         links[LINKS] = format_links(links[LINKS])
         database[os.path.basename(file_path)] = links
     return database
