@@ -114,9 +114,9 @@ def find_new_backlinks(database):
                 # print(f"file {filename} not found")
                 continue
 
-             
+            if not filename in new_backlinks.keys():
+                new_backlinks[filename] = []
 
-            new_backlinks[filename] = []
             new_backlink = filename_to_markdown_link(key)
             for backlink in database[filename][BACKLINKS]:
                 if link in backlink:
@@ -128,8 +128,9 @@ def find_new_backlinks(database):
                         is_found = True 
 
             if is_found == False:
-                new_backlinks[filename].append(new_backlink)
-                print(f"new backlink {new_backlink} in {filename} from {key}")
+                if not new_backlink in new_backlinks[filename]:
+                    new_backlinks[filename].append(new_backlink)
+                    print(f"new backlink {new_backlink} in {filename} from {key}")
 
     return  new_backlinks           
 
