@@ -1,6 +1,7 @@
 import re
 import os
 import sys 
+import json
 
 LINKS           = 0
 BACKLINKS       = 1
@@ -34,11 +35,22 @@ def write_lines_to_file(filename, lines):
     with open(filename, 'w') as file:
         file.writelines(lines)
 
-def add_line_after_backlinks(lines):
-    for i, line in enumerate(lines):
-        if line.strip() == "backlinks:":
-            lines.insert(i + 1, "test\n")
-            break
+def add_new_backlinks(info):
+    for file in info.keys():
+        lines = read_lines_from_file(file)
+        backlinks_found = False
+        for i, line in enumerate(lines):
+            if line.strip() == "backlinks:":
+                backlinks_found = True
+                for bk in info[file]:
+                    lines.insert(i + 1, f"- {bk}\n")
+                break
+        if backlinks_found == False:
+            print(f"In \"{file}\" not found \"backlinks:\" string")
+            continue
+
+        write_lines_to_file(file, lines)
+                
 
 def find_links(lines):
     backlinks = []
@@ -58,7 +70,6 @@ def find_links(lines):
     for link in links:
         for backlink in backlinks:
             if link == backlink:
-                # print(f"removed {backlink} in {links}")
                 links.remove(link)
 
     return [links, backlinks]
@@ -69,7 +80,6 @@ def format_links(links):
         new_link = re.sub(r'\[.*\]\((.*?)\)', r'[\1](\1)', link)        
         links.remove(link)
         links.append(new_link)
-        # print(f"old link {link}\nnew link {new_link}")
     return links
 
 
@@ -81,8 +91,6 @@ def create_links_database(files):
         links = find_links(lines)
         links[LINKS] = format_links(links[LINKS])
         database[os.path.basename(file_path)] = links
-
-    # print(database)
     return database
 
 def filename_to_markdown_link(file):
@@ -101,29 +109,36 @@ def find_new_backlinks(database):
         for link in database[key][LINKS]:
             filename = extract_filename(link)
             is_found = False 
-            if not filename in database:
+            if not filename in database.keys():
                 # FIXME: why not found&
                 # print(f"file {filename} not found")
                 continue
 
+             
+
             new_backlinks[filename] = []
+            new_backlink = filename_to_markdown_link(key)
             for backlink in database[filename][BACKLINKS]:
-                if link == backlink:
+                if link in backlink:
                     is_found = True 
+                       
+            if is_found == False:
+                for old_backlink in database[filename][BACKLINKS]:
+                    if new_backlink in old_backlink:
+                        is_found = True 
 
             if is_found == False:
-                print(f"new backlink {key} for {filename}")
-                new_backlinks[filename].append(filename_to_markdown_link(key))
-    print(new_backlinks)
-                
+                new_backlinks[filename].append(new_backlink)
+                print(f"new backlink {new_backlink} in {filename} from {key}")
+
+    return  new_backlinks           
 
 if __name__ == "__main__":
     file_extension = '.md'
     files = find_files_with_extension(file_extension)
     database = create_links_database(files)
-    find_new_backlinks(database)
-    
-    # for file_path in files:
-    #     replace_wiki_links_in_file(file_path)
-
+    # print(json.dumps(database, ensure_ascii=False,  indent=4))
+    new_backlinks = find_new_backlinks(database)
+    # print(json.dumps(new_backlinks, ensure_ascii=False,  indent=4))
+    add_new_backlinks(new_backlinks)
 
