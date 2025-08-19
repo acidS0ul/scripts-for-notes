@@ -2,9 +2,17 @@ import re
 import os
 import sys 
 import json
+import getopt
 
 LINKS           = 0
 BACKLINKS       = 1
+
+verbose = False
+
+def print_log(s):
+    global verbose
+    if verbose:
+        print(s)
 
 def find_files_with_extension(extension):
     files_filter = []
@@ -14,22 +22,58 @@ def find_files_with_extension(extension):
                 files_filter.append(os.path.join(root, file))
     return files_filter
 
-def replace_wiki_links_in_file(file_path):
+def replace_in_file(file_path, rg1, rg2):
     with open(file_path, 'r', encoding='utf-8') as file:
         content = file.readlines()
 
     updated_content = []
     for line in content:
-        updated_line = re.sub(r'\b\[\[(.*?)\]\]\b', r'[\1](\1.md)', line)
+        updated_line = re.sub(rg1, rg2, line)
         updated_content.append(updated_line)
 
     with open(file_path, 'w', encoding='utf-8') as file:
         file.write(''.join(updated_content))
 
+def replace_wiki_links_in_file(file_path):
+    replace_in_file(file_path, r'\b\[\[(.*?)\]\]\b', r'[\1](\1.md)')
+
+def replace_media_wiki_links_in_file(file_path):
+    replace_in_file(file_path, r'\!\[\[(.*)\]\]', r'![\1](\1)')
+
 def read_lines_from_file(filename):
     with open(filename, 'r') as file:
         lines = file.readlines()
     return lines
+
+def fix_media_path_in_file(file_path, root_dir):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        content = file.readlines()
+    
+    changed = False
+
+    updated_content = []
+    for line in content:
+        match = re.search(r"!\[.*\]\((.*)\)", line)
+        if match:
+            filename = match.group(1)
+            print_log(f"filename:{filename}") 
+            if os.path.exists(filename):
+                print_log(f"{filename} exits")
+                updated_content.append(line)
+                continue
+            if os.path.exists(root_dir + filename):
+                updated_line = re.sub(re.escape(filename), 
+                                      re.escape(root_dir + filename), line)
+                print_log(f"updated line: {updated_line}")
+                updated_content.append(updated_line)
+            else:
+                print(f"error: {root_dir + filename}, not found")
+                return
+        else:
+            updated_content.append(line)
+
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.write(''.join(updated_content))
 
 def write_lines_to_file(filename, lines):
     with open(filename, 'w') as file:
@@ -153,12 +197,47 @@ def find_new_backlinks(database):
 
     return  new_backlinks           
 
-if __name__ == "__main__":
+def usage():
+    print("-h --help - this message")
+    print("-w --wiki - replace wiki links")
+    print("-v        - verbose")
+    print("-b --back - update backlinks")
+
+def main():
+    global verbose
     file_extension = '.md'
     files = find_files_with_extension(file_extension)
-    database = create_links_database(files)
-    # print(json.dumps(database, ensure_ascii=False,  indent=4))
-    new_backlinks = find_new_backlinks(database)
-    # print(json.dumps(new_backlinks, ensure_ascii=False,  indent=4))
-    add_new_backlinks(new_backlinks)
 
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 
+                                   "hwvbp:", 
+                                   ["help", "wiki", "back", "path="])
+    except getopt.GetoptError as err:
+        print(err)
+        usage(2)
+
+    for o, a in opts:
+        if o == "-v":
+            verbose = True
+        elif o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif o in ("-p", "--path"):
+            for file in files:
+                fix_media_path_in_file(file,a)
+        elif o in ("-w", "--wiki"):
+            for file in files:
+                print_log(file)
+                replace_wiki_links_in_file(file)
+                replace_media_wiki_links_in_file(file)
+        elif o in ("-b", "--back"):
+            database = create_links_database(files)
+            print_log(json.dumps(database, ensure_ascii=False,  indent=4))
+            new_backlinks = find_new_backlinks(database)
+            print_log(json.dumps(new_backlinks, ensure_ascii=False,  indent=4))
+            add_new_backlinks(new_backlinks)
+        else:
+            assert False, "unhandled option"
+
+if __name__ == "__main__":
+    main()
