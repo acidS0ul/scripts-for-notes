@@ -202,16 +202,22 @@ def usage():
     print("-w --wiki - replace wiki links")
     print("-v        - verbose")
     print("-b --back - update backlinks")
+    print("-d --dir  - directory with files")
+
 
 def main():
     global verbose
     file_extension = '.md'
-    files = find_files_with_extension(file_extension)
+    path = '.'
+
+    option_wiki = False
+    option_path = False
+    option_back = False
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], 
-                                   "hwvbp:", 
-                                   ["help", "wiki", "back", "path="])
+                                   "hwvbp:d:", 
+                                   ["help", "wiki", "back", "path=", "dir="])
     except getopt.GetoptError as err:
         print(err)
         usage(2)
@@ -223,21 +229,41 @@ def main():
             usage()
             sys.exit()
         elif o in ("-p", "--path"):
-            for file in files:
-                fix_media_path_in_file(file,a)
+            option_path = True
+            path = a
         elif o in ("-w", "--wiki"):
-            for file in files:
-                print_log(file)
-                replace_wiki_links_in_file(file)
-                replace_media_wiki_links_in_file(file)
+            option_wiki = True
+        elif o in ("-d", "--dir"):
+            try:
+                # Изменение текущей рабочей директории
+                os.chdir(a)
+                print(f"Change work dir: {os.getcwd()}")
+            except FileNotFoundError:
+                print(f"Error: dir {a} not found.")
+            except PermissionError:
+                print(f"Error: PermissionError {a}.")
         elif o in ("-b", "--back"):
-            database = create_links_database(files)
-            print_log(json.dumps(database, ensure_ascii=False,  indent=4))
-            new_backlinks = find_new_backlinks(database)
-            print_log(json.dumps(new_backlinks, ensure_ascii=False,  indent=4))
-            add_new_backlinks(new_backlinks)
+            option_back = True
         else:
             assert False, "unhandled option"
+
+    files = find_files_with_extension(file_extension)
+
+    if option_path == True: 
+        for file in files:
+            fix_media_path_in_file(file, path)
+
+    if option_wiki == True:
+        for file in files:
+            print_log(file)
+            replace_wiki_links_in_file(file)
+            replace_media_wiki_links_in_file(file)
+
+    if option_back == True:
+        database = create_links_database(files)
+        new_backlinks = find_new_backlinks(database)
+        print_log(json.dumps(new_backlinks, ensure_ascii=False,  indent=4))
+        add_new_backlinks(new_backlinks)
 
 if __name__ == "__main__":
     main()
